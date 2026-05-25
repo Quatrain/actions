@@ -42,5 +42,5 @@ This action automates the standard package release versioning. It bumps the vers
 
 ---
 
-## 🔒 License
-Proprietary / Closed Source for Quatrain internal infrastructures.
+## ⚖️ License
+Licensed under the **GNU Affero General Public License v3.0 (AGPL v3)**. See [LICENSE.md](./LICENSE.md) for details.
