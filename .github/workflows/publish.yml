@@ -1,0 +1,35 @@
+name: Update Floating Major Version Tags
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+' # Triggers on semantic tags like v1.0.2
+
+jobs:
+  update-major-tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract Major Version
+        id: get-major
+        run: |
+          TAG_NAME=${{ github.ref_name }}
+          # Extract the major part (e.g. v1 from v1.0.2)
+          MAJOR_VERSION=$(echo "$TAG_NAME" | cut -d'.' -f1)
+          echo "major=$MAJOR_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Force-update and Push Major Tag
+        run: |
+          MAJOR_TAG=${{ steps.get-major.outputs.major }}
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          echo "Updating floating tag $MAJOR_TAG to point to ${{ github.ref_name }}..."
+          git tag -fa $MAJOR_TAG -m "Update floating tag $MAJOR_TAG to point to ${{ github.ref_name }}"
+          git push origin $MAJOR_TAG --force
