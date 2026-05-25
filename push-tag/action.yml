@@ -5,6 +5,10 @@ inputs:
     description: 'The type of version bump (patch, minor, major)'
     required: false
     default: 'patch'
+  working_directory:
+    description: 'The directory in which to execute the version bump'
+    required: false
+    default: '.'
 runs:
   using: 'composite'
   steps:
@@ -17,12 +21,14 @@ runs:
     - name: Bump version
       shell: bash
       run: |
+        cd ${{ inputs.working_directory }}
         npm --no-git-tag-version version ${{ inputs.bump_type }}
     
     - name: Get new version and name
       id: metadata
       shell: bash
       run: |
+        cd ${{ inputs.working_directory }}
         VERSION=$(node -p "require('./package.json').version")
         NAME=$(node -p "require('./package.json').name")
         echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -31,6 +37,7 @@ runs:
     - name: Commit version bump
       shell: bash
       run: |
+        cd ${{ inputs.working_directory }}
         git add package.json
         git commit -m "chore(release): publish v${{ steps.metadata.outputs.version }} of ${{ steps.metadata.outputs.name }} [skip ci]"
         
