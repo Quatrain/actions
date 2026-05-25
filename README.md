@@ -17,7 +17,7 @@ This action prepares `package.json` configurations prior to container packing by
 #### Usage Example
 ```yaml
 - name: Prepare package.json for container build
-  uses: Quatrain/actions/prepare-package-json@main
+  uses: Quatrain/actions/prepare-package-json@v1
   with:
     package_json_path: 'containers/api-gateway/package.json'
     dependency_prefix: '@quatrain/'
@@ -35,7 +35,7 @@ This action automates the standard package release versioning. It bumps the vers
 #### Usage Example
 ```yaml
 - name: Bump patch version & push tag
-  uses: Quatrain/actions/push-tag@main
+  uses: Quatrain/actions/push-tag@v1
   with:
     bump_type: 'patch'
 ```
