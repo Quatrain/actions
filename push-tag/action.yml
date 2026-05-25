@@ -1,0 +1,41 @@
+name: 'Push Release Tag'
+description: 'Bumps the version of package.json and pushes a git tag to trigger build & deployment'
+inputs:
+  bump_type:
+    description: 'The type of version bump (patch, minor, major)'
+    required: false
+    default: 'patch'
+runs:
+  using: 'composite'
+  steps:
+    - name: Configure Git
+      shell: bash
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+    
+    - name: Bump version
+      shell: bash
+      run: |
+        npm --no-git-tag-version version ${{ inputs.bump_type }}
+    
+    - name: Get new version and name
+      id: metadata
+      shell: bash
+      run: |
+        VERSION=$(node -p "require('./package.json').version")
+        NAME=$(node -p "require('./package.json').name")
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "name=$NAME" >> $GITHUB_OUTPUT
+        
+    - name: Commit version bump
+      shell: bash
+      run: |
+        git add package.json
+        git commit -m "chore(release): publish v${{ steps.metadata.outputs.version }} of ${{ steps.metadata.outputs.name }} [skip ci]"
+        
+    - name: Push commit and tag
+      shell: bash
+      run: |
+        git tag v${{ steps.metadata.outputs.version }}
+        git push origin HEAD --tags

@@ -1,0 +1,45 @@
+name: 'Prepare package.json for NPM Registry'
+description: 'Resolves workspace:* and * versions of @quatrain packages to their latest published NPM version'
+inputs:
+  package_json_path:
+    description: 'Path to the package.json to modify'
+    required: true
+    default: 'package.json'
+runs:
+  using: 'composite'
+  steps:
+    - name: Resolve and replace dependencies
+      shell: bash
+      run: |
+        node -e '
+          const fs = require("fs");
+          const { execSync } = require("child_process");
+          const targetPkgPath = "${{ inputs.package_json_path }}";
+          
+          if (!fs.existsSync(targetPkgPath)) {
+            console.error("package.json not found at " + targetPkgPath);
+            process.exit(1);
+          }
+          
+          const targetPkg = JSON.parse(fs.readFileSync(targetPkgPath, "utf8"));
+          let modified = false;
+          
+          for (const dep in targetPkg.dependencies) {
+            if (targetPkg.dependencies[dep] === "workspace:*" || (dep.startsWith("@quatrain/") && targetPkg.dependencies[dep] === "*")) {
+              try {
+                const latestVersion = execSync(`npm view ${dep} version`, { encoding: "utf8" }).trim();
+                targetPkg.dependencies[dep] = latestVersion;
+                console.log(`Resolved ${dep} to published NPM version ${latestVersion}`);
+                modified = true;
+              } catch (e) {
+                console.error(`Failed to fetch version for ${dep} from NPM. Falling back to *`);
+                targetPkg.dependencies[dep] = "*";
+                modified = true;
+              }
+            }
+          }
+          
+          if (modified) {
+            fs.writeFileSync(targetPkgPath, JSON.stringify(targetPkg, null, 2));
+          }
+        '
