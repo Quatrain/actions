@@ -1,10 +1,14 @@
 name: 'Prepare package.json for NPM Registry'
-description: 'Resolves workspace:* and * versions of @quatrain packages to their latest published NPM version'
+description: 'Resolves workspace:* and * versions of matching dependency prefixes to their latest published NPM version'
 inputs:
   package_json_path:
     description: 'Path to the package.json to modify'
     required: true
     default: 'package.json'
+  dependency_prefix:
+    description: 'The prefix of dependency package names to resolve when set to "*"'
+    required: false
+    default: '@quatrain/'
 runs:
   using: 'composite'
   steps:
@@ -15,6 +19,7 @@ runs:
           const fs = require("fs");
           const { execSync } = require("child_process");
           const targetPkgPath = "${{ inputs.package_json_path }}";
+          const prefix = "${{ inputs.dependency_prefix }}";
           
           if (!fs.existsSync(targetPkgPath)) {
             console.error("package.json not found at " + targetPkgPath);
@@ -25,7 +30,7 @@ runs:
           let modified = false;
           
           for (const dep in targetPkg.dependencies) {
-            if (targetPkg.dependencies[dep] === "workspace:*" || (dep.startsWith("@quatrain/") && targetPkg.dependencies[dep] === "*")) {
+            if (targetPkg.dependencies[dep] === "workspace:*" || (prefix && dep.startsWith(prefix) && targetPkg.dependencies[dep] === "*")) {
               try {
                 const latestVersion = execSync(`npm view ${dep} version`, { encoding: "utf8" }).trim();
                 targetPkg.dependencies[dep] = latestVersion;
