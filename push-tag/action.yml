@@ -44,5 +44,6 @@ runs:
     - name: Push commit and tag
       shell: bash
       run: |
-        git tag v${{ steps.metadata.outputs.version }}
-        git push origin HEAD --tags
+        git tag -f v${{ steps.metadata.outputs.version }}
+        git push origin HEAD
+        git push origin v${{ steps.metadata.outputs.version }} -f
