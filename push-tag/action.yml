@@ -9,6 +9,10 @@ inputs:
     description: 'The directory in which to execute the version bump'
     required: false
     default: '.'
+  tag_prefix:
+    description: 'The tag prefix to use. Set to "none" for no prefix (just "vX.Y.Z"), or leave default to use package name.'
+    required: false
+    default: 'default'
 runs:
   using: 'composite'
   steps:
@@ -31,8 +35,10 @@ runs:
         cd ${{ inputs.working_directory }}
         VERSION=$(node -p "require('./package.json').version")
         NAME=$(node -p "require('./package.json').name")
+        CLEAN_NAME=$(node -p "require('./package.json').name.split('/').pop()")
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "name=$NAME" >> $GITHUB_OUTPUT
+        echo "clean_name=$CLEAN_NAME" >> $GITHUB_OUTPUT
         
     - name: Commit version bump
       shell: bash
@@ -44,6 +50,14 @@ runs:
     - name: Push commit and tag
       shell: bash
       run: |
-        git tag -f v${{ steps.metadata.outputs.version }}
+        PREFIX="${{ inputs.tag_prefix }}"
+        if [ "$PREFIX" = "default" ] || [ -z "$PREFIX" ]; then
+          PREFIX="${{ steps.metadata.outputs.clean_name }}-"
+        elif [ "$PREFIX" = "none" ]; then
+          PREFIX=""
+        fi
+        TAG_NAME="${PREFIX}v${{ steps.metadata.outputs.version }}"
+        
+        git tag -f "$TAG_NAME"
         git push origin HEAD
-        git push origin v${{ steps.metadata.outputs.version }} -f
+        git push origin "$TAG_NAME" -f
