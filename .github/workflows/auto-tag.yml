@@ -1,0 +1,54 @@
+name: Auto Tag and Update v1
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'README.md'
+      - 'LICENSE.md'
+
+jobs:
+  auto-tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate next tag and update floating tag
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Get latest semantic tag
+          git fetch --tags
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v1.0.0")
+          
+          echo "Latest tag: $LATEST_TAG"
+          
+          # Remove 'v' prefix and split version
+          VERSION_STR=${LATEST_TAG#v}
+          IFS='.' read -r -a parts <<< "$VERSION_STR"
+          
+          MAJOR=${parts[0]}
+          MINOR=${parts[1]}
+          PATCH=${parts[2]}
+          
+          # Increment patch version
+          NEW_PATCH=$((PATCH + 1))
+          NEW_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
+          MAJOR_TAG="v${MAJOR}"
+          
+          echo "Creating new release tag $NEW_TAG..."
+          git tag "$NEW_TAG"
+          
+          echo "Updating floating tag $MAJOR_TAG..."
+          git tag -fa "$MAJOR_TAG" -m "Update floating tag $MAJOR_TAG to point to $NEW_TAG"
+          
+          # Push both tags
+          git push origin "$NEW_TAG"
+          git push origin "$MAJOR_TAG" --force
