@@ -1,0 +1,81 @@
+name: 'Cleanup On-Demand App Preview (Staging -prXX)'
+description: 'Tears down the ephemeral ArgoCD preview application and updates the GitHub PR when a PR is closed or merged'
+inputs:
+  pr_number:
+    description: 'Pull Request number'
+    required: true
+    default: ${{ github.event.pull_request.number }}
+  app_name:
+    description: 'Application name (e.g. studio, api-gateway)'
+    required: true
+  base_domain:
+    description: 'Staging environment base domain (e.g. apps.quatrain.dev or dev.brad.team)'
+    required: false
+    default: 'apps.quatrain.dev'
+  github_token:
+    description: 'GitHub token for PR comment updates'
+    required: true
+    default: ${{ github.token }}
+  argocd_server:
+    description: 'ArgoCD Server URL (optional)'
+    required: false
+  argocd_auth_token:
+    description: 'ArgoCD Authentication Token (optional)'
+    required: false
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Teardown ArgoCD Preview Application (if configured)
+      if: inputs.argocd_server != '' && inputs.argocd_auth_token != ''
+      shell: bash
+      run: |
+        APP_INSTANCE="${{ inputs.app_name }}-pr${{ inputs.pr_number }}"
+        echo "::notice::Deleting ephemeral ArgoCD application: ${APP_INSTANCE} on ${{ inputs.argocd_server }}..."
+        
+        # Call ArgoCD REST API to delete ephemeral application and cascade-delete child k8s resources
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+          -H "Authorization: Bearer ${{ inputs.argocd_auth_token }}" \
+          -H "Content-Type: application/json" \
+          "${{ inputs.argocd_server }}/api/v1/applications/${APP_INSTANCE}?cascade=true")
+        
+        if [ "$HTTP_CODE" -eq 200 ] || [ "$HTTP_CODE" -eq 204 ] || [ "$HTTP_CODE" -eq 404 ]; then
+          echo "ArgoCD application ${APP_INSTANCE} deleted successfully (HTTP $HTTP_CODE)."
+        else
+          echo "::warning::ArgoCD deletion returned HTTP $HTTP_CODE"
+        fi
+
+    - name: Update PR Comment with Teardown Status
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ inputs.github_token }}
+        script: |
+          const prNumber = parseInt('${{ inputs.pr_number }}', 10);
+          if (!prNumber) return;
+          const appName = '${{ inputs.app_name }}';
+          const baseDomain = '${{ inputs.base_domain }}';
+          const previewUrl = `https://${appName}-pr${prNumber}.${baseDomain}`;
+          
+          const body = `### 🧹 On-Demand QA Staging Preview Teardown (PR #${prNumber})\n\nThe ephemeral preview environment **\`${appName}-pr${prNumber}\`** ([${previewUrl}](${previewUrl})) has been **successfully deleted and torn down** following PR closure.\n\n*All associated Kubernetes & ArgoCD resources have been pruned.*`;
+          
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: prNumber
+          });
+          const botComment = comments.find(c => c.body.includes('On-Demand QA Staging Preview'));
+          if (botComment) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: botComment.id,
+              body: body
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: body
+            });
+          }

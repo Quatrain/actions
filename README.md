@@ -65,27 +65,88 @@ Automates on-demand pre-release preview package publishing (with version suffix 
 
 ---
 
+---
+
 ### 4. `deploy-app-preview`
-Builds and pushes an ephemeral container image tagged `:prXX` (e.g. `ghcr.io/quatrain/totalymage-frontend:pr25`) and notifies the PR with the live staging preview URL (`https://<app>-prXX.dev.brad.team`) for QA testing.
+Builds and pushes an ephemeral container image tagged `:prXX` (e.g. `ghcr.io/quatrain/studio:pr25`), triggers optional ArgoCD sync, and notifies the PR with the live staging preview URL (`https://studio-pr25.apps.quatrain.dev`) for QA testing.
 
 * **Path**: `./deploy-app-preview`
 * **Inputs**:
   * `pr_number`: Pull Request number (default: `${{ github.event.pull_request.number }}`).
-  * `app_name`: Application name identifier (e.g. `totalymage-frontend`, `studio-web`).
+  * `app_name`: Application identifier (e.g. `studio`, `api-gateway`, `studio-web`).
   * `containerfile`: Path to `Containerfile` (default: `Containerfile`).
   * `context`: Build context path (default: `.`).
-  * `base_domain`: Staging base domain (default: `dev.brad.team`).
+  * `base_domain`: Staging base domain (default: `dev.brad.team`, e.g. `apps.quatrain.dev`).
   * `github_token`: GitHub Token.
+  * `argocd_server`: ArgoCD Server URL (optional).
+  * `argocd_auth_token`: ArgoCD Auth Token (optional).
 
-#### Usage Example (in App Frontend / Backend CI workflow)
+---
+
+### 5. `cleanup-app-preview`
+Automatically deletes and tears down the ephemeral ArgoCD preview application and associated Kubernetes resources when a PR is merged or closed without merge.
+
+* **Path**: `./cleanup-app-preview`
+* **Inputs**:
+  * `pr_number`: Pull Request number (default: `${{ github.event.pull_request.number }}`).
+  * `app_name`: Application identifier (e.g. `studio`, `api-gateway`).
+  * `base_domain`: Staging base domain (e.g. `apps.quatrain.dev`).
+  * `github_token`: GitHub Token.
+  * `argocd_server`: ArgoCD Server URL (optional).
+  * `argocd_auth_token`: ArgoCD Auth Token (optional).
+
+---
+
+### 🌟 Complete On-Demand QA Preview Lifecycle Workflow (`.github/workflows/preview.yml`)
+
+Here is how to set up the complete on-demand staging preview lifecycle in any application repository (e.g. `CoreApps`):
+
 ```yaml
-- name: Deploy On-Demand App Preview
-  if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'qa:preview')
-  uses: Quatrain/actions/deploy-app-preview@main
-  with:
-    app_name: 'totalymage-frontend'
-    base_domain: 'dev.brad.team'
-    github_token: ${{ secrets.GITHUB_TOKEN }}
+name: Staging Preview Lifecycle
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, closed]
+
+jobs:
+  deploy-preview:
+    name: Deploy On-Demand App Preview
+    if: github.event.action != 'closed' && contains(github.event.pull_request.labels.*.name, 'qa:preview')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy App Preview to Staging
+        uses: Quatrain/actions/deploy-app-preview@main
+        with:
+          pr_number: ${{ github.event.pull_request.number }}
+          app_name: 'studio'
+          base_domain: 'apps.quatrain.dev'
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          argocd_server: ${{ secrets.ARGOCD_SERVER }}
+          argocd_auth_token: ${{ secrets.ARGOCD_TOKEN }}
+
+  cleanup-preview:
+    name: Cleanup Staging Preview
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Teardown App Preview from Staging
+        uses: Quatrain/actions/cleanup-app-preview@main
+        with:
+          pr_number: ${{ github.event.pull_request.number }}
+          app_name: 'studio'
+          base_domain: 'apps.quatrain.dev'
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          argocd_server: ${{ secrets.ARGOCD_SERVER }}
+          argocd_auth_token: ${{ secrets.ARGOCD_TOKEN }}
 ```
 
 ---
