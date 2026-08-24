@@ -42,5 +42,53 @@ This action automates the standard package release versioning. It bumps the vers
 
 ---
 
+### 3. `publish-package-preview`
+Automates on-demand pre-release preview package publishing (with version suffix `-prXX` and dist-tag `prXX`) to NPM and GitHub Packages, complete with automated sticky PR comments for QA testing.
+
+* **Path**: `./publish-package-preview`
+* **Inputs**:
+  * `pr_number`: Pull Request number (default: `${{ github.event.pull_request.number }}`).
+  * `npm_token`: NPM registry authentication token.
+  * `github_token`: GitHub token (for registry and PR comment updates).
+  * `script_path`: Path to publish script (default: `bin/publish_all.js`).
+  * `tag_prefix`: Dist-tag prefix (default: `pr`).
+
+#### Usage Example (in Monorepo CI workflow)
+```yaml
+- name: Publish On-Demand QA Preview Packages
+  if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'qa:preview')
+  uses: Quatrain/actions/publish-package-preview@main
+  with:
+    npm_token: ${{ secrets.NPM_TOKEN }}
+    github_token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+---
+
+### 4. `deploy-app-preview`
+Builds and pushes an ephemeral container image tagged `:prXX` (e.g. `ghcr.io/quatrain/totalymage-frontend:pr25`) and notifies the PR with the live staging preview URL (`https://<app>-prXX.dev.brad.team`) for QA testing.
+
+* **Path**: `./deploy-app-preview`
+* **Inputs**:
+  * `pr_number`: Pull Request number (default: `${{ github.event.pull_request.number }}`).
+  * `app_name`: Application name identifier (e.g. `totalymage-frontend`, `studio-web`).
+  * `containerfile`: Path to `Containerfile` (default: `Containerfile`).
+  * `context`: Build context path (default: `.`).
+  * `base_domain`: Staging base domain (default: `dev.brad.team`).
+  * `github_token`: GitHub Token.
+
+#### Usage Example (in App Frontend / Backend CI workflow)
+```yaml
+- name: Deploy On-Demand App Preview
+  if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'qa:preview')
+  uses: Quatrain/actions/deploy-app-preview@main
+  with:
+    app_name: 'totalymage-frontend'
+    base_domain: 'dev.brad.team'
+    github_token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+---
+
 ## ⚖️ License
 Licensed under the **GNU Affero General Public License v3.0 (AGPL v3)**. See [LICENSE.md](./LICENSE.md) for details.

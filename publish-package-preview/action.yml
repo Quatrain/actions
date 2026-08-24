@@ -1,0 +1,82 @@
+name: 'Publish Monorepo Package Preview'
+description: 'Builds and publishes on-demand pre-release preview packages (-prXX) to NPM and GitHub Packages with automated sticky PR comments'
+inputs:
+  pr_number:
+    description: 'Pull Request number'
+    required: true
+    default: ${{ github.event.pull_request.number }}
+  npm_token:
+    description: 'NPM registry authentication token'
+    required: false
+  github_token:
+    description: 'GitHub token for registry authentication and PR comments'
+    required: true
+    default: ${{ github.token }}
+  script_path:
+    description: 'Path to monorepo publish script'
+    required: false
+    default: 'bin/publish_all.js'
+  tag_prefix:
+    description: 'Dist-tag prefix (e.g. pr -> pr25)'
+    required: false
+    default: 'pr'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Configure Registry Authentication
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.npm_token }}" ]; then
+          echo "//registry.npmjs.org/:_authToken=${{ inputs.npm_token }}" > ~/.npmrc
+        fi
+        echo "//npm.pkg.github.com/:_authToken=${{ inputs.github_token }}" >> ~/.npmrc
+
+    - name: Execute Monorepo Preview Publishing
+      shell: bash
+      run: |
+        PR_NUM="${{ inputs.pr_number }}"
+        if [ -z "$PR_NUM" ]; then
+          echo "::error::PR number is missing or not provided."
+          exit 1
+        fi
+        echo "::notice::Publishing preview packages with suffix -pr${PR_NUM} and dist-tag ${{ inputs.tag_prefix }}${PR_NUM}..."
+        if [ -f "${{ inputs.script_path }}" ]; then
+          node "${{ inputs.script_path }}" --pr "$PR_NUM" --tag "${{ inputs.tag_prefix }}${PR_NUM}"
+        else
+          echo "::error::Publish script not found at ${{ inputs.script_path }}"
+          exit 1
+        fi
+
+    - name: Post Sticky PR Comment with Preview Info
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ inputs.github_token }}
+        script: |
+          const prNumber = parseInt('${{ inputs.pr_number }}', 10);
+          if (!prNumber) return;
+          const tag = '${{ inputs.tag_prefix }}' + prNumber;
+          const body = `### 🚀 On-Demand QA Preview Packages (PR #${prNumber})\n\nPreview packages have been published to NPM and GitHub Packages with dist-tag \`${tag}\`.\n\n**Installation in client applications / QA testing:**\n\`\`\`bash\nyarn add <package-name>@${tag}\n# or\nnpm install <package-name>@${tag}\n\`\`\``;
+          
+          // Look for existing preview comment to update or create a new one
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: prNumber
+          });
+          const botComment = comments.find(c => c.body.includes('On-Demand QA Preview Packages'));
+          if (botComment) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: botComment.id,
+              body: body
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: body
+            });
+          }

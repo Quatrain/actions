@@ -1,0 +1,97 @@
+name: 'Deploy On-Demand App Preview (Staging -prXX)'
+description: 'Builds and pushes an ephemeral container image tagged :prXX and notifies the PR with the staging preview URL'
+inputs:
+  pr_number:
+    description: 'Pull Request number'
+    required: true
+    default: ${{ github.event.pull_request.number }}
+  app_name:
+    description: 'Application name (used for hostname and container naming)'
+    required: true
+  containerfile:
+    description: 'Path to Containerfile / Dockerfile'
+    required: false
+    default: 'Containerfile'
+  context:
+    description: 'Docker build context path'
+    required: false
+    default: '.'
+  registry:
+    description: 'Container registry hostname'
+    required: false
+    default: 'ghcr.io'
+  base_domain:
+    description: 'Staging environment base domain'
+    required: false
+    default: 'dev.brad.team'
+  github_token:
+    description: 'GitHub token for registry login and PR comment updates'
+    required: true
+    default: ${{ github.token }}
+  platforms:
+    description: 'Target container platforms'
+    required: false
+    default: 'linux/amd64,linux/arm64'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ inputs.registry }}
+        username: ${{ github.actor }}
+        password: ${{ inputs.github_token }}
+
+    - name: Build and push Preview Container Image
+      uses: docker/build-push-action@v5
+      with:
+        context: ${{ inputs.context }}
+        file: ${{ inputs.containerfile }}
+        platforms: ${{ inputs.platforms }}
+        push: true
+        tags: |
+          ${{ inputs.registry }}/${{ github.repository_owner }}/${{ inputs.app_name }}:pr${{ inputs.pr_number }}
+          ${{ inputs.registry }}/${{ github.repository_owner }}/${{ inputs.app_name }}:sha-${{ github.sha }}
+
+    - name: Post Sticky PR Comment with Live Staging Preview Info
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ inputs.github_token }}
+        script: |
+          const prNumber = parseInt('${{ inputs.pr_number }}', 10);
+          if (!prNumber) return;
+          const appName = '${{ inputs.app_name }}';
+          const baseDomain = '${{ inputs.base_domain }}';
+          const previewUrl = `https://${appName}-pr${prNumber}.${baseDomain}`;
+          const imageTag = `${{ inputs.registry }}/${context.repo.owner}/${appName}:pr${prNumber}`;
+          
+          const body = `### 🌐 On-Demand QA Staging Preview (PR #${prNumber})\n\nAn ephemeral staging preview environment has been generated for QA testing:\n\n- 🔗 **Preview URL:** [${previewUrl}](${previewUrl})\n- 🐳 **Container Image:** \`${imageTag}\`\n\n*Updated automatically on each push with label \`qa:preview\`.*`;
+          
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: prNumber
+          });
+          const botComment = comments.find(c => c.body.includes('On-Demand QA Staging Preview'));
+          if (botComment) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: botComment.id,
+              body: body
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: body
+            });
+          }
