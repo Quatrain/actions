@@ -1,0 +1,74 @@
+name: 'Generate Staging Version Tag'
+description: 'Computes standardized staging version tag conforming to Quatrain/TotalYmage spec: X.Y.Z-YYDOY-HHMM-shaxxx'
+inputs:
+  package_json_path:
+    description: 'Path to package.json containing the base SemVer'
+    required: false
+    default: 'package.json'
+  version_override:
+    description: 'Optional manual version override (X.Y.Z) instead of reading package.json'
+    required: false
+    default: ''
+  working_directory:
+    description: 'Working directory context'
+    required: false
+    default: '.'
+
+outputs:
+  tag:
+    description: 'Full standardized staging tag (X.Y.Z-YYDOY-HHMM-shaxxx)'
+    value: ${{ steps.generate.outputs.tag }}
+  version:
+    description: 'Base SemVer (X.Y.Z)'
+    value: ${{ steps.generate.outputs.version }}
+  yydoy:
+    description: 'Year and 3-digit Day-of-Year in UTC (YYDOY)'
+    value: ${{ steps.generate.outputs.yydoy }}
+  hhmm:
+    description: 'Hour and Minute in UTC (HHMM)'
+    value: ${{ steps.generate.outputs.hhmm }}
+  sha:
+    description: 'Short Git commit SHA'
+    value: ${{ steps.generate.outputs.sha }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Compute staging tag
+      id: generate
+      shell: bash
+      run: |
+        cd "${{ inputs.working_directory }}"
+
+        OVERRIDE="${{ inputs.version_override }}"
+        if [ -n "$OVERRIDE" ]; then
+          BASE_VERSION="$OVERRIDE"
+        elif [ -f "${{ inputs.package_json_path }}" ]; then
+          BASE_VERSION=$(node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('${{ inputs.package_json_path }}', 'utf8'));
+            const ver = (pkg.version || '0.0.0').split('-')[0];
+            console.log(ver);
+          ")
+        else
+          echo "::error::Neither version_override nor valid package.json found at ${{ inputs.package_json_path }}"
+          exit 1
+        fi
+
+        # YYDOY: 2-digit UTC year + 3-digit zero-padded day of year (001-366)
+        YYDOY=$(date -u +'%y%j')
+
+        # HHMM: 2-digit UTC hour + 2-digit UTC minute (00-59)
+        HHMM=$(date -u +'%H%M')
+
+        # Short commit SHA
+        SHORT_SHA=$(git rev-parse --short HEAD)
+
+        STAGING_TAG="${BASE_VERSION}-${YYDOY}-${HHMM}-sha${SHORT_SHA}"
+
+        echo "Computed Staging Version Tag: $STAGING_TAG"
+        echo "tag=${STAGING_TAG}" >> "$GITHUB_OUTPUT"
+        echo "version=${BASE_VERSION}" >> "$GITHUB_OUTPUT"
+        echo "yydoy=${YYDOY}" >> "$GITHUB_OUTPUT"
+        echo "hhmm=${HHMM}" >> "$GITHUB_OUTPUT"
+        echo "sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"

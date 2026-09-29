@@ -151,5 +151,40 @@ jobs:
 
 ---
 
+
+---
+
+### 6. `staging-tag`
+Generates standardized staging version tags conforming to the Quatrain/TotalYmage convention: `<X.Y.Z>-<YYDOY>-<HHMM>-sha<xxx>` (where `YYDOY` is 2-digit year and 3-digit day of year in UTC, `HHMM` is UTC time, and `sha` is the short commit hash).
+
+* **Path**: `./staging-tag`
+* **Inputs**:
+  * `package_json_path`: Path to `package.json` to extract base SemVer (default: `package.json`).
+  * `version_override`: Optional manual SemVer override (default: empty).
+  * `working_directory`: Context working directory (default: `.`).
+* **Outputs**:
+  * `tag`: Full tag formatted as `X.Y.Z-YYDOY-HHMM-shaxxx`.
+  * `version`: Base SemVer `X.Y.Z`.
+  * `yydoy`: 5-digit Year and Day-of-Year `YYDOY`.
+  * `hhmm`: 4-digit UTC time `HHMM`.
+  * `sha`: Short commit hash.
+
+#### Usage Example
+```yaml
+- name: Generate Staging Version Tag
+  id: staging-tag
+  uses: Quatrain/actions/staging-tag@main
+  with:
+    package_json_path: 'packages/api-express/package.json'
+
+- name: Build & Push Docker Image
+  uses: docker/build-push-action@v6
+  with:
+    tags: |
+      ghcr.io/totalymage/api-express:${{ steps.staging-tag.outputs.tag }}
+      rg.fr-par.scw.cloud/totalymage/api-express:${{ steps.staging-tag.outputs.tag }}
+```
+
 ## ⚖️ License
 Licensed under the **GNU Affero General Public License v3.0 (AGPL v3)**. See [LICENSE.md](./LICENSE.md) for details.
+
