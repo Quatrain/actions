@@ -28,6 +28,18 @@ inputs:
     description: 'GitHub token for registry login and PR comment updates'
     required: true
     default: ${{ github.token }}
+  registry_username:
+    description: 'Registry username (optional, defaults to github.actor; e.g. Scaleway access key)'
+    required: false
+    default: ''
+  registry_password:
+    description: 'Registry password (optional, defaults to github_token; e.g. Scaleway secret key)'
+    required: false
+    default: ''
+  build_args:
+    description: 'Newline-separated Docker build arguments (optional)'
+    required: false
+    default: ''
   platforms:
     description: 'Target container platforms'
     required: false
@@ -52,8 +64,8 @@ runs:
       uses: docker/login-action@v3
       with:
         registry: ${{ inputs.registry }}
-        username: ${{ github.actor }}
-        password: ${{ inputs.github_token }}
+        username: ${{ inputs.registry_username || github.actor }}
+        password: ${{ inputs.registry_password || inputs.github_token }}
 
     - name: Build and push Preview Container Image
       uses: docker/build-push-action@v5
@@ -62,9 +74,10 @@ runs:
         file: ${{ inputs.containerfile }}
         platforms: ${{ inputs.platforms }}
         push: true
+        build-args: ${{ inputs.build_args }}
         tags: |
           ${{ inputs.registry }}/${{ github.repository_owner }}/${{ inputs.app_name }}:pr${{ inputs.pr_number }}
-          ${{ inputs.registry }}/${{ github.repository_owner }}/${{ inputs.app_name }}:sha-${{ github.sha }}
+          ${{ inputs.registry }}/${{ github.repository_owner }}/${{ inputs.app_name }}:sha-${{ github.event.pull_request.head.sha || github.sha }}
 
     - name: Trigger ArgoCD Application Sync (if configured)
       if: inputs.argocd_server != '' && inputs.argocd_auth_token != ''

@@ -78,8 +78,13 @@ Builds and pushes an ephemeral container image tagged `:prXX` (e.g. `ghcr.io/qua
   * `context`: Build context path (default: `.`).
   * `base_domain`: Staging base domain (default: `dev.brad.team`, e.g. `apps.quatrain.dev`).
   * `github_token`: GitHub Token.
+  * `registry`: Container registry hostname (default: `ghcr.io`, e.g. `rg.fr-par.scw.cloud`).
+  * `registry_username` / `registry_password`: Registry credentials (optional, default: `github.actor` / `github_token`).
+  * `build_args`: Newline-separated Docker build arguments (optional).
+  * `platforms`: Target platforms (default: `linux/amd64,linux/arm64`).
   * `argocd_server`: ArgoCD Server URL (optional).
   * `argocd_auth_token`: ArgoCD Auth Token (optional).
+* **Tags pushed**: `:prXX` and `:sha-<PR head sha>` (matches `head_sha` of the ArgoCD pull-request generator).
 
 ---
 
